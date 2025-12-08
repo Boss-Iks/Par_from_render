@@ -7,6 +7,7 @@ ENV TZ=UTC
 
 # Install all necessary packages in a single RUN command to reduce image layers
 RUN apt-get update && apt-get install -y \
+    libtbb-dev \
     software-properties-common \
     wget \
     curl \
