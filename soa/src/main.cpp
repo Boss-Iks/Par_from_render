@@ -1,0 +1,52 @@
+#include "camera.hpp"
+#include "cli.hpp"
+#include "config.hpp"
+#include "framebuffer_soa.hpp"
+#include "ppm_writer.hpp"
+#include "rayos.hpp"
+#include "scene.hpp"
+#include <iostream>
+#include <vector>
+
+using namespace std;
+
+int main(int argc, char * argv[]) {
+  std::vector<std::string_view> args;
+  args.reserve(static_cast<size_t>(argc));
+  for (int i = 0; i < argc; ++i) {
+    args.emplace_back(argv[i]);  // NOLINT
+  }
+
+  CLIArgs cli = parse_cli(args, "render-soa");
+  Config cfg  = parse_config(cli.config_path);
+  std::cout << "Config loaded (defaults): width=" << cfg.image_width << "\n";
+
+  Scene scene = parse_scene(cli.scene_path);
+
+  Camera cam = make_camera_from_config(cfg);
+  std::cout << "Camera ready (" << cam.image_width << "x" << cam.image_height << ") \n";
+  // Light sanity prints (avoid unused warnings)
+  std::cout << "dx=(" << cam.dx[0] << "," << cam.dx[1] << "," << cam.dx[2] << ")\n";
+  std::cout << "dy=(" << cam.dy[0] << "," << cam.dy[1] << "," << cam.dy[2] << ")\n";
+
+  // Minimal output to avoid unused warnings and confirm flow
+  std::cout << "Scene loaded (materials=" << scene.materials.size()
+            << ", spheres=" << scene.spheres.size() << ", cylinders=" << scene.cylinders.size()
+            << ") \n";
+
+  std::cout << "Config: " << cli.config_path << "\n";
+  std::cout << "Scene:  " << cli.scene_path << "\n";
+  std::cout << "Output: " << cli.output_path << "\n";
+  std::cout << "CLI parsing OK \n";
+
+  // implementation of the SOA rendering (filling memory with ray color)
+  std::size_t const n =
+      static_cast<std::size_t>(cam.image_width) * static_cast<std::size_t>(cam.image_height);
+  FramebufferSOA fb;
+  fb.R.resize(n);
+  fb.G.resize(n);
+  fb.B.resize(n);
+  trace_rays_soa(cam, scene, fb);
+  writePPM_SOA(cli.output_path, fb, cam.image_width, cam.image_height);
+  return 0;
+}
