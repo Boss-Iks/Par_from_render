@@ -47,8 +47,6 @@ endif()
 include_directories(${CMAKE_SOURCE_DIR}/common/include)
 
 add_subdirectory(common)
-add_subdirectory(aos)
 add_subdirectory(soa)
 add_subdirectory(utcommon)
-add_subdirectory(utaos)
 add_subdirectory(utsoa)
