@@ -8,6 +8,9 @@
 #include <stdexcept>
 #include <string>
 #include <vector>
+#include <tbb/parallel_for.h>
+#include <tbb/blocked_range.h>
+#include <tbb/partitioner.h>
 
 // estructuras locales para evitar dependencias de headers externos
 struct Pixel {
@@ -60,32 +63,34 @@ namespace {
 
 }  // namespace
 
-// escribe framebuffer AOS a archivo PPM
-bool writePPM_AOS(std::string const & ruta, std::vector<Pixel> const & fb, int ancho, int alto) {
-  FilePtr archivo = abrir_archivo(ruta);
-  escribir_encabezado(archivo.get(), ancho, alto);
-
-  for (int fila = 0; fila < alto; ++fila) {
-    auto const indice_fila = static_cast<std::size_t>(fila) * static_cast<std::size_t>(ancho);
-    for (int col = 0; col < ancho; ++col) {
-      Pixel const & pixel = fb[indice_fila + static_cast<std::size_t>(col)];
-      escribir_triplete(archivo.get(), pixel.r, pixel.g, pixel.b);
-    }
-  }
-  return true;
-}
 
 // escribe framebuffer SOA a archivo PPM
-bool writePPM_SOA(std::string const & ruta, FramebufferSOA const & fb, int ancho, int alto) {
-  FilePtr archivo = abrir_archivo(ruta);
-  escribir_encabezado(archivo.get(), ancho, alto);
+bool writePPM_SOA(std::string const & ruta,
+                  FramebufferSOA const & fb,
+                  int ancho, int alto                 )          
+{
+    FilePtr archivo = abrir_archivo(ruta);
+    escribir_encabezado(archivo.get(), ancho, alto);
 
-  for (int fila = 0; fila < alto; ++fila) {
-    auto const indice_fila = static_cast<std::size_t>(fila) * static_cast<std::size_t>(ancho);
-    for (int col = 0; col < ancho; ++col) {
-      auto const idx = indice_fila + static_cast<std::size_t>(col);
-      escribir_triplete(archivo.get(), fb.R[idx], fb.G[idx], fb.B[idx]);
-    }
-  }
-  return true;
+    tbb::task_arena arena(10);    // limita el número de hilos
+
+    arena.execute([&] {
+        tbb::parallel_for(
+            tbb::blocked_range<int>(0, alto),
+            [&](const tbb::blocked_range<int>& r) {
+                for (int fila = r.begin(); fila != r.end(); ++fila) {
+                    auto const indice_fila =
+                        static_cast<std::size_t>(fila) * static_cast<std::size_t>(ancho);
+                    for (int col = 0; col < ancho; ++col) {
+                        auto const idx = indice_fila + static_cast<std::size_t>(col);
+                        escribir_triplete(archivo.get(),
+                                          fb.R[idx], fb.G[idx], fb.B[idx]);
+                    }
+                }
+            },
+            tbb::simple_partitioner{}
+        );
+    });
+
+    return true;
 }

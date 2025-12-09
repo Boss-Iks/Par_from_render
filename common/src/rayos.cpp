@@ -375,40 +375,6 @@ namespace {
 
 }  // namespace
 
-void trace_rays_aos(Camera const & camara, Scene const & escena, std::vector<Pixel> & framebuffer) {
-  auto const ancho = static_cast<std::size_t>(camara.image_width);
-  auto const alto  = static_cast<std::size_t>(camara.image_height);
-  framebuffer.resize(ancho * alto);
-  std::mt19937_64 generador_material{
-    static_cast<std::mt19937_64::result_type>(camara.material_rng_seed)};
-  std::mt19937_64 generador_rayos{static_cast<std::mt19937_64::result_type>(camara.ray_rng_seed)};
-  std::uniform_real_distribution<double> aleatoriedad(-0.5, 0.5);
-  auto const spp       = static_cast<std::size_t>(camara.samples_per_pixel);
-  auto const max_depth = static_cast<std::size_t>(camara.max_depth);
-  for (std::size_t fila = 0; fila < alto; ++fila) {
-    for (std::size_t col = 0; col < ancho; ++col) {
-      std::array<double, 3> acumulado{0.0, 0.0, 0.0};
-      for (std::size_t s = 0; s < spp; ++s) {
-        auto const pos =
-            calcular_pos_pixel(camara, static_cast<double>(col) + aleatoriedad(generador_rayos),
-                               static_cast<double>(fila) + aleatoriedad(generador_rayos));
-        Ray rayo{};
-        rayo.origin    = camara.P;
-        rayo.direction = normalize(sub(pos, camara.P));
-        RayContext ctx{max_depth, &generador_material};
-        auto const c = ray_color(rayo, &escena, &camara, ctx);
-        acumulado[0] += c[0];
-        acumulado[1] += c[1];
-        acumulado[2] += c[2];
-      }
-      acumulado[0] /= static_cast<double>(spp);
-      acumulado[1] /= static_cast<double>(spp);
-      acumulado[2] /= static_cast<double>(spp);
-      framebuffer[fila * ancho + col] = color_a_pixel(acumulado, camara.gamma);
-    }
-  }
-}
-
 void trace_rays_soa(Camera const & camara, Scene const & escena, FramebufferSOA & framebuffer) {
   auto const ancho = static_cast<std::size_t>(camara.image_width);
   auto const alto  = static_cast<std::size_t>(camara.image_height);
