@@ -1,8 +1,7 @@
 add_library(common STATIC)
 
 target_sources(common 
-    PRIVATE 
-        src/vector.cpp
+    PRIVATE         
         src/ppm_writer.cpp
         src/cli.cpp
         src/config.cpp

@@ -2,9 +2,6 @@ set(COMMON_SRC_FILES
   #"${CMAKE_SOURCE_DIR}/soa/src/file1.cpp"
 )
 
-set(CURRENT_DIR_SRC_FILES 
-  "${CMAKE_CURRENT_SOURCE_DIR}/test_vector.cpp"
-)
 
 # add_unit_test_target(
 #   TARGET_NAME utsoa

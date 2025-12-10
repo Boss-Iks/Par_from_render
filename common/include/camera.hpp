@@ -1,6 +1,7 @@
 #pragma once
 #include "config.hpp"  // uses your parsed config
 #include <array>
+#include <cstdint>
 
 struct Camera {
   // Inputs (copied from config)

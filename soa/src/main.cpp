@@ -5,7 +5,9 @@
 #include "ppm_writer.hpp"
 #include "rayos.hpp"
 #include "scene.hpp"
+#include <cstddef>
 #include <iostream>
+#include <string_view>
 #include <vector>
 
 using namespace std;
@@ -17,11 +19,11 @@ int main(int argc, char * argv[]) {
     args.emplace_back(argv[i]);  // NOLINT
   }
 
-  CLIArgs cli = parse_cli(args, "render-soa");
-  Config cfg  = parse_config(cli.config_path);
+  CLIArgs const cli = parse_cli(args, "render-soa");
+  Config const cfg  = parse_config(cli.config_path);
   std::cout << "Config loaded (defaults): width=" << cfg.image_width << "\n";
 
-  Scene scene = parse_scene(cli.scene_path);
+  Scene const scene = parse_scene(cli.scene_path);
 
   Camera cam = make_camera_from_config(cfg);
   std::cout << "Camera ready (" << cam.image_width << "x" << cam.image_height << ") \n";

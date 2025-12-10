@@ -1,7 +1,5 @@
 #pragma once
 #include <array>
-#include <cstdint>
-#include <string>
 #include <string_view>
 
 struct Config {

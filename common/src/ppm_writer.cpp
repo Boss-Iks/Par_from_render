@@ -4,20 +4,16 @@
 #include <cstdio>
 #include <cstring>
 #include <memory>
+#include <oneapi/tbb/blocked_range.h>
+#include <oneapi/tbb/parallel_for.h>
+#include <oneapi/tbb/partitioner.h>
+#include <oneapi/tbb/task_arena.h>
 #include <print>
 #include <stdexcept>
 #include <string>
 #include <vector>
-#include <tbb/parallel_for.h>
-#include <tbb/blocked_range.h>
-#include <tbb/partitioner.h>
 
 // estructuras locales para evitar dependencias de headers externos
-struct Pixel {
-  std::uint8_t r;
-  std::uint8_t g;
-  std::uint8_t b;
-};
 
 struct FramebufferSOA {
   std::vector<std::uint8_t> R;
@@ -63,34 +59,28 @@ namespace {
 
 }  // namespace
 
-
 // escribe framebuffer SOA a archivo PPM
-bool writePPM_SOA(std::string const & ruta,
-                  FramebufferSOA const & fb,
-                  int ancho, int alto                 )          
-{
-    FilePtr archivo = abrir_archivo(ruta);
-    escribir_encabezado(archivo.get(), ancho, alto);
+bool writePPM_SOA(std::string const & ruta, FramebufferSOA const & fb, int ancho, int alto) {
+  FilePtr archivo = abrir_archivo(ruta);
+  escribir_encabezado(archivo.get(), ancho, alto);
 
-    tbb::task_arena arena(10);    // limita el número de hilos
+  tbb::task_arena arena(10);  // limita el número de hilos
 
-    arena.execute([&] {
-        tbb::parallel_for(
-            tbb::blocked_range<int>(0, alto),
-            [&](const tbb::blocked_range<int>& r) {
-                for (int fila = r.begin(); fila != r.end(); ++fila) {
-                    auto const indice_fila =
-                        static_cast<std::size_t>(fila) * static_cast<std::size_t>(ancho);
-                    for (int col = 0; col < ancho; ++col) {
-                        auto const idx = indice_fila + static_cast<std::size_t>(col);
-                        escribir_triplete(archivo.get(),
-                                          fb.R[idx], fb.G[idx], fb.B[idx]);
-                    }
-                }
-            },
-            tbb::simple_partitioner{}
-        );
-    });
+  arena.execute([&] {
+    tbb::parallel_for(
+        tbb::blocked_range<int>(0, alto),
+        [&](tbb::blocked_range<int> const & r) {
+          for (int fila = r.begin(); fila != r.end(); ++fila) {
+            auto const indice_fila =
+                static_cast<std::size_t>(fila) * static_cast<std::size_t>(ancho);
+            for (int col = 0; col < ancho; ++col) {
+              auto const idx = indice_fila + static_cast<std::size_t>(col);
+              escribir_triplete(archivo.get(), fb.R[idx], fb.G[idx], fb.B[idx]);
+            }
+          }
+        },
+        tbb::simple_partitioner{});
+  });
 
-    return true;
+  return true;
 }

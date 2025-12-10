@@ -2,6 +2,7 @@
 #include "../include/config.hpp"
 #include <array>
 #include <cmath>
+#include <cstdint>
 #include <cstdlib>
 #include <iostream>
 

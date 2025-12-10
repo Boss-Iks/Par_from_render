@@ -1,16 +1,18 @@
 #include "../include/rayos.hpp"
+#include "../../soa/src/framebuffer_soa.hpp"
 #include "../include/camera.hpp"
 #include "../include/scene.hpp"
 #include <algorithm>
+#include <array>
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
 #include <limits>
+#include <oneapi/tbb/blocked_range2d.h>
+#include <oneapi/tbb/enumerable_thread_specific.h>
+#include <oneapi/tbb/parallel_for.h>
+#include <oneapi/tbb/partitioner.h>
 #include <random>
-#include <tbb/parallel_for.h>
-#include <tbb/blocked_range2d.h>
-#include <tbb/partitioner.h>
-#include <tbb/enumerable_thread_specific.h>
 
 namespace {
 
@@ -224,10 +226,10 @@ namespace {
     auto const base_inf  = sub(datos.centro, mitad_eje);
     auto const base_sup  = add(datos.centro, mitad_eje);
 
-    DatosTapa tapa_inf{base_inf, mul(datos.eje, NEGATIVO), datos.radio, datos.mat_id};
+    DatosTapa const tapa_inf{base_inf, mul(datos.eje, NEGATIVO), datos.radio, datos.mat_id};
     probar_tapa(rayo, tapa_inf, hit);
 
-    DatosTapa tapa_sup{base_sup, datos.eje, datos.radio, datos.mat_id};
+    DatosTapa const tapa_sup{base_sup, datos.eje, datos.radio, datos.mat_id};
     probar_tapa(rayo, tapa_sup, hit);
 
     return hit.hit;
@@ -279,7 +281,7 @@ namespace {
     auto const d1_hat = normalize(d1);
 
     std::uniform_real_distribution<double> dist(-mat.metal.diffusion, mat.metal.diffusion);
-    std::array<double, 3> ruido{dist(*rng), dist(*rng), dist(*rng)};
+    std::array<double, 3> const ruido{dist(*rng), dist(*rng), dist(*rng)};
 
     auto const dr_final = add(d1_hat, ruido);
 
@@ -297,7 +299,7 @@ namespace {
     double const sin_theta = std::sqrt(std::max(0.0, 1.0 - cos_theta * cos_theta));
 
     // CORRECTED: outward = 1/η, inward = η
-    double rho_p = hacia_fuera ? (1.0 / mat.refr.index) : mat.refr.index;
+    double const rho_p = hacia_fuera ? (1.0 / mat.refr.index) : mat.refr.index;
 
     if (not hacia_fuera) {
       normal = mul(normal, -1.0);
@@ -377,87 +379,52 @@ namespace {
             color_a_byte(corregir(c[2]))};
   }
 
+  struct RNGBundle {
+    std::mt19937_64 gm, gr;
+    std::uniform_real_distribution<double> d;
+
+    RNGBundle(std::uint64_t sm, std::uint64_t sr) : gm(sm), gr(sr), d(-0.5, 0.5) { }
+  };
+
 }  // namespace
 
-
-void trace_rays_soa(Camera const & camara,
-                    Scene const & escena,
-                    FramebufferSOA & framebuffer)
-{
-    auto const ancho = static_cast<std::size_t>(camara.image_width);
-    auto const alto  = static_cast<std::size_t>(camara.image_height);
-
-    framebuffer.R.resize(ancho * alto);
-    framebuffer.G.resize(ancho * alto);
-    framebuffer.B.resize(ancho * alto);
-
-    auto const spp       = static_cast<std::size_t>(camara.samples_per_pixel);
-    auto const max_depth = static_cast<std::size_t>(camara.max_depth);
-
-    // One RNG bundle per thread
-    struct RNGBundle {
-        std::mt19937_64 generador_material;
-        std::mt19937_64 generador_rayos;
-        std::uniform_real_distribution<double> aleatoriedad;
-        RNGBundle(std::uint64_t seed_mat, std::uint64_t seed_ray)
-            : generador_material(seed_mat),
-              generador_rayos(seed_ray),
-              aleatoriedad(-0.5, 0.5) {}
-    };
-
-    tbb::enumerable_thread_specific<RNGBundle> ets_rng(
-        RNGBundle{
-            static_cast<std::mt19937_64::result_type>(camara.material_rng_seed),
-            static_cast<std::mt19937_64::result_type>(camara.ray_rng_seed)
-        }
-    );
-
-    tbb::parallel_for(
-        tbb::blocked_range2d<std::size_t>(0, alto, 0, ancho),
-        [&](const tbb::blocked_range2d<std::size_t>& r) {
-            auto& rng = ets_rng.local();  // thread-local RNGs
-
-            for (std::size_t fila = r.rows().begin(); fila != r.rows().end(); ++fila) {
-                for (std::size_t col = r.cols().begin(); col != r.cols().end(); ++col) {
-
-                    std::array<double, 3> acumulado{0.0, 0.0, 0.0};
-
-                    for (std::size_t s = 0; s < spp; ++s) {
-                        double jitter_x = rng.aleatoriedad(rng.generador_rayos);
-                        double jitter_y = rng.aleatoriedad(rng.generador_rayos);
-
-                        auto const pos = calcular_pos_pixel(
-                            camara,
-                            static_cast<double>(col)  + jitter_x,
-                            static_cast<double>(fila) + jitter_y
-                        );
-
-                        Ray rayo{};
-                        rayo.origin    = camara.P;
-                        rayo.direction = normalize(sub(pos, camara.P));
-
-                        RayContext ctx{max_depth, &rng.generador_material};
-                        auto const c = ray_color(rayo, &escena, &camara, ctx);
-
-                        acumulado[0] += c[0];
-                        acumulado[1] += c[1];
-                        acumulado[2] += c[2];
-                    }
-
-                    acumulado[0] /= static_cast<double>(spp);
-                    acumulado[1] /= static_cast<double>(spp);
-                    acumulado[2] /= static_cast<double>(spp);
-
-                    auto const px  = color_a_pixel(acumulado, camara.gamma);
-                    auto const idx = fila * ancho + col;
-
-                    framebuffer.R[idx] = px.r;
-                    framebuffer.G[idx] = px.g;
-                    framebuffer.B[idx] = px.b;
-                }
+void trace_rays_soa(Camera const & camara, Scene const & escena, FramebufferSOA & framebuffer) {
+  auto const ancho = std::size_t(camara.image_width), alto = std::size_t(camara.image_height);
+  framebuffer.R.resize(ancho * alto);
+  framebuffer.G.resize(ancho * alto);
+  framebuffer.B.resize(ancho * alto);
+  auto const spp = std::size_t(camara.samples_per_pixel), max_depth = std::size_t(camara.max_depth);
+  tbb::enumerable_thread_specific<RNGBundle> ets_rng(
+      RNGBundle{std::mt19937_64::result_type(camara.material_rng_seed),
+                std::mt19937_64::result_type(camara.ray_rng_seed)});
+  tbb::parallel_for(
+      tbb::blocked_range2d<std::size_t>(0, alto, 0, ancho),
+      [&](tbb::blocked_range2d<std::size_t> const & r) {
+        auto & rng = ets_rng.local();
+        for (auto fila = r.rows().begin(); fila != r.rows().end(); ++fila) {
+          for (auto col = r.cols().begin(); col != r.cols().end(); ++col) {
+            std::array<double, 3> acc{0.0, 0.0, 0.0};
+            for (std::size_t s = 0; s < spp; ++s) {
+              auto const pos = calcular_pos_pixel(camara, double(col) + rng.d(rng.gr),
+                                                  double(fila) + rng.d(rng.gr));
+              Ray const rayo{camara.P, normalize(sub(pos, camara.P))};
+              RayContext ctx{max_depth, &rng.gm};
+              auto const c = ray_color(rayo, &escena, &camara, ctx);
+              acc[0] += c[0];
+              acc[1] += c[1];
+              acc[2] += c[2];
             }
-        },
-        tbb::auto_partitioner{}   // suitable default for irregular work
-    );
+            double const inv = 1.0 / double(spp);
+            acc[0] *= inv;
+            acc[1] *= inv;
+            acc[2] *= inv;
+            auto const px      = color_a_pixel(acc, camara.gamma);
+            auto const idx     = fila * ancho + col;
+            framebuffer.R[idx] = px.r;
+            framebuffer.G[idx] = px.g;
+            framebuffer.B[idx] = px.b;
+          }
+        }
+      },
+      tbb::auto_partitioner{});
 }
-

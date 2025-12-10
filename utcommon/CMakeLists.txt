@@ -1,15 +1,8 @@
-set(COMMON_SRC_FILES 
-  "${CMAKE_SOURCE_DIR}/common/src/vector.cpp"
+set(COMMON_SRC_FILES   
   "${CMAKE_SOURCE_DIR}/common/src/rayos.cpp"
 )
 
-set(CURRENT_DIR_SRC_FILES 
-  "${CMAKE_CURRENT_SOURCE_DIR}/test_vector.cpp"
-  "${CMAKE_CURRENT_SOURCE_DIR}/test_color.cpp"
-  "${CMAKE_CURRENT_SOURCE_DIR}/test_fb_aos.cpp"
-  "${CMAKE_CURRENT_SOURCE_DIR}/test_fb_soa.cpp"
-  "${CMAKE_CURRENT_SOURCE_DIR}/test_ppm_writer.cpp"
-  "${CMAKE_CURRENT_SOURCE_DIR}/test_rayos.cpp"
+set(CURRENT_DIR_SRC_FILES     
 )
 
 add_unit_test_target(
@@ -24,7 +17,6 @@ add_unit_test_target(
 add_test(NAME utcommon COMMAND $<TARGET_FILE:utcommon>)
 
 
-target_include_directories(utcommon PRIVATE
-  ${CMAKE_SOURCE_DIR}/aos/src
+target_include_directories(utcommon PRIVATE  
   ${CMAKE_SOURCE_DIR}/soa/src
 )

@@ -45,7 +45,6 @@ endif()
 
 # Make headers in common/include visible to all subprojects
 include_directories(${CMAKE_SOURCE_DIR}/common/include)
-
 add_subdirectory(common)
 add_subdirectory(soa)
 add_subdirectory(utcommon)
